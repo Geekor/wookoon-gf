@@ -1,0 +1,110 @@
+// 身份验证与鉴权服务契约
+// 编译：gf gen pb（或在项目根目录执行 make pb）
+
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "api/auth/v1;v1";
+
+service Auth {
+  // 登录：校验账号密码，签发访问令牌与刷新令牌
+  rpc Login (LoginReq) returns (LoginRes) {}
+  // 刷新令牌：使用刷新令牌换取新的令牌对（旧刷新令牌将被吊销）
+  rpc RefreshToken (RefreshTokenReq) returns (RefreshTokenRes) {}
+  // 登出：吊销访问令牌
+  rpc Logout (LogoutReq) returns (LogoutRes) {}
+  // 解析令牌：校验访问令牌合法性（含黑名单），返回令牌声明信息，供网关或其他微服务调用
+  rpc ParseToken (ParseTokenReq) returns (ParseTokenRes) {}
+  // 鉴权：判断用户是否拥有指定权限码
+  rpc CheckPermission (CheckPermissionReq) returns (CheckPermissionRes) {}
+  // 获取用户角色列表
+  rpc GetUserRoles (GetUserRolesReq) returns (GetUserRolesRes) {}
+  // 获取用户权限列表
+  rpc GetUserPermissions (GetUserPermissionsReq) returns (GetUserPermissionsRes) {}
+  // 注销账户：删除用户及其所有关联数据（user / user_role / oauth_account / token_blacklist）
+  rpc DeleteAccount (DeleteAccountReq) returns (DeleteAccountRes) {}
+}
+
+// 用户基本信息
+message UserInfo {
+  uint64 Id = 1;             // 用户ID
+  string Passport = 2;       // 账号
+  string Nickname = 3;       // 昵称
+  repeated string Roles = 4; // 角色编码列表
+}
+
+message LoginReq {
+  string Passport = 1; // v: required
+  string Password = 2; // v: required
+}
+
+message LoginRes {
+  string AccessToken = 1;    // 访问令牌
+  string RefreshToken = 2;   // 刷新令牌
+  int64 AccessExpireAt = 3;  // 访问令牌过期时间（Unix秒）
+  int64 RefreshExpireAt = 4; // 刷新令牌过期时间（Unix秒）
+  UserInfo User = 5;         // 用户信息
+}
+
+message RefreshTokenReq {
+  string RefreshToken = 1; // v: required
+}
+
+message RefreshTokenRes {
+  string AccessToken = 1;    // 新访问令牌
+  string RefreshToken = 2;   // 新刷新令牌
+  int64 AccessExpireAt = 3;  // 访问令牌过期时间（Unix秒）
+  int64 RefreshExpireAt = 4; // 刷新令牌过期时间（Unix秒）
+}
+
+message LogoutReq {
+  string AccessToken = 1; // v: required
+}
+
+message LogoutRes {}
+
+message ParseTokenReq {
+  string Token = 1; // v: required
+}
+
+message ParseTokenRes {
+  uint64 UserId = 1;         // 用户ID
+  string Passport = 2;       // 账号
+  string Nickname = 3;       // 昵称
+  repeated string Roles = 4; // 角色编码列表
+  int64 IssuedAt = 5;        // 签发时间（Unix秒）
+  int64 ExpireAt = 6;        // 过期时间（Unix秒）
+}
+
+message CheckPermissionReq {
+  uint64 UserId = 1;     // v: required
+  string Permission = 2; // v: required
+}
+
+message CheckPermissionRes {
+  bool Granted = 1; // 是否拥有权限
+}
+
+message GetUserRolesReq {
+  uint64 UserId = 1; // v: required
+}
+
+message GetUserRolesRes {
+  repeated string Roles = 1; // 角色编码列表
+}
+
+message GetUserPermissionsReq {
+  uint64 UserId = 1; // v: required
+}
+
+message GetUserPermissionsRes {
+  repeated string Permissions = 1; // 权限码列表
+}
+
+message DeleteAccountReq {
+  uint64 UserId = 1;      // v: required
+  string AccessToken = 2; // v: required
+}
+
+message DeleteAccountRes {}

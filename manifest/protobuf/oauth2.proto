@@ -1,0 +1,147 @@
+// 身份验证与鉴权服务契约
+// 编译：gf gen pb（或在项目根目录执行 make pb）
+
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "api/auth/v1;v1";
+
+import "auth.proto";
+
+service OAuth2 {
+  // OAuth2：获取第三方授权 URL（含 state 防 CSRF）
+  rpc GetOAuth2AuthURL (GetOAuth2AuthURLReq) returns (GetOAuth2AuthURLRes) {}
+  // OAuth2：用授权码登录（换 token → 查/建用户 → 签发内部 JWT）
+  rpc OAuth2Login (OAuth2LoginReq) returns (OAuth2LoginRes) {}
+  // OAuth2：预登录（换 token → 查绑定状态，已绑定返回 JWT，未绑定返回 pendingToken）
+  rpc OAuth2PreLogin (OAuth2PreLoginReq) returns (OAuth2PreLoginRes) {}
+  // OAuth2：绑定到已有本地账号（通过 pendingToken + passport/password）
+  rpc OAuth2BindLocal (OAuth2BindLocalReq) returns (OAuth2BindLocalRes) {}
+  // OAuth2：跳过绑定，自动创建新本地账号并绑定
+  rpc OAuth2CreateLocal (OAuth2CreateLocalReq) returns (OAuth2CreateLocalRes) {}
+  // OAuth2：将第三方账号绑定到已有用户
+  rpc BindOAuth2Account (BindOAuth2AccountReq) returns (BindOAuth2AccountRes) {}
+  // OAuth2：解绑第三方账号
+  rpc UnbindOAuth2Account (UnbindOAuth2AccountReq) returns (UnbindOAuth2AccountRes) {}
+  // OAuth2：获取用户已绑定的第三方账号列表
+  rpc ListOAuth2Accounts (ListOAuth2AccountsReq) returns (ListOAuth2AccountsRes) {}
+}
+
+// OAuth2 提供商
+enum OAuth2Provider {
+  GITHUB = 0;
+  GOOGLE = 1;
+  WECHAT = 2;
+  WOOKOON = 3;
+}
+
+message GetOAuth2AuthURLReq {
+  OAuth2Provider Provider = 1; // v: required
+  string RedirectUrl = 2;     // v: required
+}
+
+message GetOAuth2AuthURLRes {
+  string AuthUrl = 1; // 授权页面 URL，前端重定向至此
+  string State = 2;   // CSRF 防护 state（回调时需原样传回）
+}
+
+message OAuth2LoginReq {
+  OAuth2Provider Provider = 1; // v: required
+  string Code = 2;             // v: required
+  string State = 3;            // v: required
+  string RedirectUrl = 4;      // v: required
+}
+
+message OAuth2LoginRes {
+  string AccessToken = 1;    // 内部访问令牌
+  string RefreshToken = 2;   // 内部刷新令牌
+  int64 AccessExpireAt = 3;  // 访问令牌过期时间（Unix秒）
+  int64 RefreshExpireAt = 4; // 刷新令牌过期时间（Unix秒）
+  auth.v1.UserInfo User = 5; // 用户信息
+  bool IsNewUser = 6;        // 是否为新注册用户
+}
+
+message BindOAuth2AccountReq {
+  uint64 UserId = 1;            // v: required
+  OAuth2Provider Provider = 2;  // v: required
+  string Code = 3;              // v: required
+  string State = 4;              // v: required
+  string RedirectUrl = 5;       // v: required
+}
+
+message BindOAuth2AccountRes {}
+
+message UnbindOAuth2AccountReq {
+  uint64 UserId = 1;            // v: required
+  OAuth2Provider Provider = 2;  // v: required
+}
+
+message UnbindOAuth2AccountRes {
+  bool AccountDeleted = 1; // 解绑后本地账户是否已被级联删除（无密码的第三方账号会被删除）
+}
+
+message ListOAuth2AccountsReq {
+  uint64 UserId = 1; // v: required
+}
+
+message OAuth2AccountInfo {
+  OAuth2Provider Provider = 1; // 提供商
+  string OpenId = 2;           // 第三方用户唯一标识
+  string Nickname = 3;         // 第三方昵称
+  string Avatar = 4;           // 第三方头像 URL
+}
+
+message ListOAuth2AccountsRes {
+  repeated OAuth2AccountInfo Accounts = 1; // 已绑定的第三方账号列表
+}
+
+// ============ OAuth2 预登录/绑定流程 ============
+
+message OAuth2PreLoginReq {
+  OAuth2Provider Provider = 1; // v: required
+  string Code = 2;             // v: required
+  string State = 3;            // v: required
+  string RedirectUrl = 4;      // v: required
+}
+
+message OAuth2PreLoginRes {
+  bool IsBound = 1;     // 是否已绑定本地账号
+  // 已绑定时以下字段有效
+  string AccessToken = 2;
+  string RefreshToken = 3;
+  int64 AccessExpireAt = 4;
+  int64 RefreshExpireAt = 5;
+  auth.v1.UserInfo User = 6;
+  // 未绑定时以下字段有效
+  string PendingToken = 7;   // 待绑定令牌（用于后续绑定/创建）
+  string Nickname = 8;       // 第三方昵称
+  string Avatar = 9;         // 第三方头像
+  string ProviderName = 10;  // 提供商名称
+}
+
+message OAuth2BindLocalReq {
+  string PendingToken = 1; // v: required
+  string Passport = 2;     // v: required
+  string Password = 3;    // v: required
+}
+
+message OAuth2BindLocalRes {
+  string AccessToken = 1;
+  string RefreshToken = 2;
+  int64 AccessExpireAt = 3;
+  int64 RefreshExpireAt = 4;
+  auth.v1.UserInfo User = 5;
+}
+
+message OAuth2CreateLocalReq {
+  string PendingToken = 1; // v: required
+}
+
+message OAuth2CreateLocalRes {
+  string AccessToken = 1;
+  string RefreshToken = 2;
+  int64 AccessExpireAt = 3;
+  int64 RefreshExpireAt = 4;
+  auth.v1.UserInfo User = 5;
+}
